@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crowd Counting Frontend</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the canvas and image container */
+        #image-container {
+            position: relative;
+            width: fit-content;
+            max-width: 100%;
+            margin: auto;
+            overflow: auto;
+            max-height: 80vh;
+        }
+        #image-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+        }
+        #display-image {
+            display: block;
+            border-radius: 0.5rem;
+            max-width: none;
+            height: auto;
+        }
+        .point {
+            position: absolute;
+            background-color: rgba(255, 0, 0, 0.7);
+            border-radius: 50%;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 font-sans leading-normal tracking-normal text-gray-100">
+
+    <div class="container mx-auto p-8">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
+            <h1 class="text-3xl font-bold mb-4 text-center text-gray-100">Worm Counting</h1>
+            <p class="text-gray-300 mb-6 text-center">Upload an image and a coordinate file to begin editing.</p>
+
+            <!-- File Upload Section -->
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+                <div class="flex-1">
+                    <label for="image-upload" class="block text-sm font-medium text-gray-200 mb-2">Image File</label>
+                    <input type="file" id="image-upload" accept="image/*" class="block w-full text-sm text-gray-300 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-600 file:text-violet-100 hover:file:bg-violet-500">
+                </div>
+                <div class="flex-1">
+                    <label for="coords-upload" class="block text-sm font-medium text-gray-200 mb-2">Coordinates File (.txt)</label>
+                    <input type="file" id="coords-upload" accept=".txt" class="block w-full text-sm text-gray-300 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-600 file:text-violet-100 hover:file:bg-violet-500">
+                </div>
+            </div>
+
+            <!-- Controls for Point Size -->
+            <div class="mb-6">
+                <label for="point-size" class="block text-sm font-medium text-gray-200">Point Size: <span id="point-size-value">5</span>px</label>
+                <input type="range" id="point-size" min="1" max="20" value="5" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+            </div>
+
+            <!-- Image Display and Canvas for Points -->
+            <div id="image-container" class="mb-6 hidden">
+                <img id="display-image" src="" alt="Uploaded Image">
+                <canvas id="image-canvas"></canvas>
+            </div>
+
+            <!-- Action Button -->
+            <div class="text-center">
+                <button id="process-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>
+                    Process Image
+                </button>
+            </div>
+             <div id="status-message" class="mt-4 text-center"></div>
+        </div>
+    </div>
+
+    <script>
+        // DOM element references
+        const imageUpload = document.getElementById('image-upload');
+        const coordsUpload = document.getElementById('coords-upload');
+        const pointSizeSlider = document.getElementById('point-size');
+        const pointSizeValue = document.getElementById('point-size-value');
+        const imageContainer = document.getElementById('image-container');
+        const displayImage = document.getElementById('display-image');
+        const canvas = document.getElementById('image-canvas');
+        const processButton = document.getElementById('process-button');
+        const statusMessage = document.getElementById('status-message');
+        const ctx = canvas.getContext('2d');
+
+        let points = [];
+        let pointSize = 5;
+        let draggingPointIndex = -1;
+        let isDragging = false;
+
+        // History management
+        let historyStack = []; // Store previous states
+        let maxHistorySize = 50; // Limit history to prevent memory issues
+        let currentHistoryIndex = -1; // Track current position in history
+
+        // Add keyboard event listener for Ctrl+Z
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'z') {
+                e.preventDefault();
+                undoLastAction();
+            }
+        }); 
+
+
+        // --- Event Listeners ---
+        imageUpload.addEventListener('change', handleFileUpload);
+        coordsUpload.addEventListener('change', handleFileUpload);
+        pointSizeSlider.addEventListener('input', (e) => {
+            pointSize = parseInt(e.target.value, 10);
+            pointSizeValue.textContent = pointSize;
+            drawPoints();
+        });
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('click', handleCanvasClick);
+        processButton.addEventListener('click', processImage);
+
+
+        // Spacebar event listeners to hide/show points
+        let spacebarHeld = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !spacebarHeld) {
+                e.preventDefault();
+                spacebarHeld = true;
+                // Clear only the points, keep the image
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' && spacebarHeld) {
+                e.preventDefault();
+                spacebarHeld = false;
+                drawPoints();
+            }
+        });
+
+        //  --- History management ---
+        // Save current state to history
+        function saveToHistory() {
+            // Create a deep copy of current points
+            const currentState = JSON.parse(JSON.stringify(points));
+            historyStack.push(currentState);
+    
+            // Limit history size
+            if (historyStack.length > maxHistorySize) {
+                historyStack.shift(); // Remove oldest entry
+            }
+    
+        }
+
+        // Undo last action
+        function undoLastAction() {
+            if (historyStack.length === 0) return;
+    
+            // if there is a previous state, use it, otherwise do nothing
+            if (historyStack.length > 0) {
+                points = JSON.parse(JSON.stringify(historyStack[historyStack.length - 1]));
+            } else {
+                // do nothing
+            }
+            // Update UI
+            drawPoints();
+
+            // Remove current state from history
+            historyStack.pop();
+        }
+
+
+        // --- Functions ---
+        function handleFileUpload() {
+            const imageFile = imageUpload.files[0];
+            const coordsFile = coordsUpload.files[0];
+
+            if (imageFile) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    displayImage.src = e.target.result;
+                    displayImage.onload = () => {
+                        imageContainer.classList.remove('hidden');
+                        // Set canvas to match the actual displayed image dimensions
+                        const displayedWidth = displayImage.offsetWidth;
+                        const displayedHeight = displayImage.offsetHeight;
+                        canvas.width = displayedWidth;
+                        canvas.height = displayedHeight;
+                        
+                        // Scale the canvas to match the image display size
+                        const scaleX = displayedWidth / displayImage.naturalWidth;
+                        const scaleY = displayedHeight / displayImage.naturalHeight;
+                        
+                        if (coordsFile) {
+                            processCoordsFile(coordsFile, scaleX, scaleY);
+                        } else {
+                            points = []; // Clear points if no coords file
+                            drawPoints();
+                        }
+                    };
+                };
+                reader.readAsDataURL(imageFile);
+                processButton.disabled = false;
+            }
+        }
+
+        function processCoordsFile(file, scaleX = 1, scaleY = 1) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const lines = e.target.result.split('\n').filter(line => line.trim() !== '');
+                points = lines.map(line => {
+                    const [x, y] = line.split('\t').map(Number);
+                    // Scale coordinates to match the displayed image size
+                    return { x: x * scaleX, y: y * scaleY };
+                });
+                console.log('Parsed points:', points);
+                drawPoints();
+            };
+            reader.readAsText(file);
+        }
+
+        function drawPoints() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+            points.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, pointSize, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function getPointAt(x, y) {
+            return points.findIndex(p => {
+                const dx = p.x - x;
+                const dy = p.y - y;
+                return Math.sqrt(dx * dx + dy * dy) < pointSize;
+            });
+        }
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            draggingPointIndex = getPointAt(x, y);
+        }
+
+        function handleMouseMove(e) {
+            if (draggingPointIndex === -1) return;
+            const rect = canvas.getBoundingClientRect();
+            points[draggingPointIndex].x = e.clientX - rect.left;
+            points[draggingPointIndex].y = e.clientY - rect.top;
+            drawPoints();
+        }
+
+        function handleMouseUp() {
+            if (draggingPointIndex !== -1) {
+                draggingPointIndex = -1;
+                isDragging = true;
+            }    
+        }
+
+        function handleCanvasClick(e) {
+            if (draggingPointIndex !== -1) return;
+
+            // once new position of points is set (after mouse up), stop the dragging action
+            if (isDragging) {
+                isDragging = false;
+                return;
+            }
+
+            saveToHistory();
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const pointIndex = getPointAt(x, y);
+            
+            if(pointIndex > -1) {
+                points.splice(pointIndex, 1);
+            } else {
+                points.push({ x, y });
+                console.log('Added point:', x, y);
+            }
+            drawPoints();
+        }
+
+        async function processImage() {
+            statusMessage.textContent = 'Processing...';
+            statusMessage.className = 'mt-4 text-center text-blue-400';
+
+            const formData = new FormData();
+            formData.append('image', imageUpload.files[0]);
+            formData.append('points', JSON.stringify(points));
+
+            try {
+                const response = await fetch('/upload', { // Updated URL for Flask
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    statusMessage.textContent = 'Successfully sent to the processing cluster!';
+                    statusMessage.className = 'mt-4 text-center text-green-400';
+                } else {
+                    throw new Error(result.message || 'Unknown error');
+                }
+            } catch (error) {
+                statusMessage.textContent = `Error: ${error.message}`;
+                statusMessage.className = 'mt-4 text-center text-red-400';
+            }
+        }
+    </script>
+</body>
+</html>
