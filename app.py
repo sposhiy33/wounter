@@ -41,8 +41,3 @@ def upload_image():
         return jsonify({'status': 'success', 'message': 'Image and points received.'})
     
     return jsonify({'status': 'error', 'message': 'Invalid request method.'}), 405
-
-# This allows running the app directly from the script
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
