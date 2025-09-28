@@ -41,3 +41,35 @@ def upload_image():
         return jsonify({'status': 'success', 'message': 'Image and points received.'})
     
     return jsonify({'status': 'error', 'message': 'Invalid request method.'}), 405
+
+# This route handles the image analysis for the processing tab.
+@app.route('/analyze', methods=['POST'])
+def analyze_image():
+    """
+    Handles the upload of an image for automatic worm counting analysis.
+    
+    In a real-world scenario, you would add the logic here to:
+    1. Receive the image file.
+    2. Process the image using your machine learning model.
+    3. Return the analysis results including worm count and coordinates.
+    """
+    if request.method == 'POST':
+        # The image file can be accessed via request.files
+        # image_file = request.files['image']
+        
+        # Since this is a frontend-focused example, we will simulate
+        # the analysis and return a mock result.
+        
+        # In your actual implementation, you would replace this with a call
+        # to your machine learning model.
+        # result = analyze_with_model(image_file)
+        
+        # Mock result for demonstration
+        return jsonify({
+            'status': 'success', 
+            'message': 'Image analyzed successfully.',
+            'count': 42,  # Mock worm count
+            'coordinates': []  # Mock coordinates array
+        })
+    
+    return jsonify({'status': 'error', 'message': 'Invalid request method.'}), 405
