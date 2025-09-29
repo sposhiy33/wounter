@@ -83,7 +83,14 @@
                         </ul>
                     </div>
                 </div>
-                <p class="text-gray-300 mt-2 text-xs">• Space to hide/show points (works in both modes)</p>
+                <div class="mt-2">
+                    <p class="text-yellow-300 font-medium mb-1 text-xs">Zoom Controls:</p>
+                    <ul class="text-gray-300 space-y-1 text-xs">
+                        <li>• Ctrl + Plus/Minus or Ctrl + Scroll to zoom</li>
+                        <li>• Ctrl + 0 to reset zoom</li>
+                        <li>• Hold SPACE to hide/show points</li>
+                    </ul>
+                </div>
             </div>
 
             <!-- File Upload Section -->
@@ -119,6 +126,22 @@
             <div class="mb-6">
                 <label for="point-size" class="block text-sm font-medium text-gray-200">Point Size: <span id="point-size-value">5</span>px</label>
                 <input type="range" id="point-size" min="1" max="20" value="5" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+            </div>
+
+            <!-- Zoom Controls -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-200 mb-2">Zoom: <span id="zoom-value">100</span>%</label>
+                <div class="flex gap-2">
+                    <button id="zoom-out-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
+                        Zoom Out
+                    </button>
+                    <button id="zoom-reset-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
+                        Reset
+                    </button>
+                    <button id="zoom-in-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
+                        Zoom In
+                    </button>
+                </div>
             </div>
 
             <!-- Image Display and Canvas for Points -->
@@ -175,6 +198,10 @@
         const selectModeBtn = document.getElementById('select-mode-btn');
         const clearSelectionBtn = document.getElementById('clear-selection-btn');
         const modeDescription = document.getElementById('mode-description');
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const zoomResetBtn = document.getElementById('zoom-reset-btn');
+        const zoomValue = document.getElementById('zoom-value');
         const ctx = canvas.getContext('2d');
         
         // Tab references
@@ -203,13 +230,19 @@
         let isSelecting = false;
         let selectionStart = { x: 0, y: 0 };
         let selectionEnd = { x: 0, y: 0 };
+        
+        // Zoom state
+        let zoomLevel = 1.0;
+        let zoomStep = 0.2;
+        let minZoom = 0.5;
+        let maxZoom = 3.0;
 
         // History management
         let historyStack = []; // Store previous states
         let maxHistorySize = 50; // Limit history to prevent memory issues
         let currentHistoryIndex = -1; // Track current position in history
 
-        // Add keyboard event listener for Ctrl+Z and Delete
+        // Add keyboard event listener for Ctrl+Z, Delete, and zoom controls
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'z') {
                 e.preventDefault();
@@ -217,6 +250,15 @@
             } else if (e.key === 'Delete' && selectedPoints.size > 0 && currentMode === 'select') {
                 e.preventDefault();
                 deleteSelectedPoints();
+            } else if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
+                e.preventDefault();
+                zoomIn();
+            } else if (e.ctrlKey && e.key === '-') {
+                e.preventDefault();
+                zoomOut();
+            } else if (e.ctrlKey && e.key === '0') {
+                e.preventDefault();
+                resetZoom();
             }
         }); 
 
@@ -232,10 +274,14 @@
         editModeBtn.addEventListener('click', () => switchMode('edit'));
         selectModeBtn.addEventListener('click', () => switchMode('select'));
         clearSelectionBtn.addEventListener('click', clearSelection);
+        zoomInBtn.addEventListener('click', () => zoomIn());
+        zoomOutBtn.addEventListener('click', () => zoomOut());
+        zoomResetBtn.addEventListener('click', () => resetZoom());
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('mousemove', handleMouseMove);
         canvas.addEventListener('mouseup', handleMouseUp);
         canvas.addEventListener('click', handleCanvasClick);
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
         
         // Tab switching event listeners
         pointEditingTab.addEventListener('click', () => switchTab('point-editing'));
@@ -265,6 +311,49 @@
                 drawPoints();
             }
         });
+
+        // --- Zoom Functions ---
+        function zoomIn() {
+            if (zoomLevel < maxZoom) {
+                zoomLevel = Math.min(zoomLevel + zoomStep, maxZoom);
+                updateZoom();
+            }
+        }
+
+        function zoomOut() {
+            if (zoomLevel > minZoom) {
+                zoomLevel = Math.max(zoomLevel - zoomStep, minZoom);
+                updateZoom();
+            }
+        }
+
+        function resetZoom() {
+            zoomLevel = 1.0;
+            updateZoom();
+        }
+
+        function updateZoom() {
+            zoomValue.textContent = Math.round(zoomLevel * 100);
+            
+            // Update image and canvas scaling
+            if (displayImage.src) {
+                const originalWidth = displayImage.naturalWidth;
+                const originalHeight = displayImage.naturalHeight;
+                const scaledWidth = originalWidth * zoomLevel;
+                const scaledHeight = originalHeight * zoomLevel;
+                
+                // Update image display
+                displayImage.style.width = scaledWidth + 'px';
+                displayImage.style.height = scaledHeight + 'px';
+                
+                // Update canvas size
+                canvas.width = scaledWidth;
+                canvas.height = scaledHeight;
+                
+                // Redraw points with new scale
+                drawPoints();
+            }
+        }
 
         // --- Tab Management ---
         function switchTab(tabName) {
@@ -393,15 +482,14 @@
                     displayImage.src = e.target.result;
                     displayImage.onload = () => {
                         imageContainer.classList.remove('hidden');
-                        // Set canvas to match the actual displayed image dimensions
-                        const displayedWidth = displayImage.offsetWidth;
-                        const displayedHeight = displayImage.offsetHeight;
-                        canvas.width = displayedWidth;
-                        canvas.height = displayedHeight;
                         
-                        // Scale the canvas to match the image display size
-                        const scaleX = displayedWidth / displayImage.naturalWidth;
-                        const scaleY = displayedHeight / displayImage.naturalHeight;
+                        // Reset zoom when loading new image
+                        zoomLevel = 1.0;
+                        updateZoom();
+                        
+                        // Scale the canvas to match the image display size with zoom
+                        const scaleX = (displayImage.offsetWidth * zoomLevel) / displayImage.naturalWidth;
+                        const scaleY = (displayImage.offsetHeight * zoomLevel) / displayImage.naturalHeight;
                         
                         if (coordsFile) {
                             processCoordsFile(coordsFile, scaleX, scaleY);
@@ -435,10 +523,13 @@
         function drawPoints() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // Scale point size with zoom for better visibility
+            const scaledPointSize = pointSize * zoomLevel;
+            
             points.forEach((p, index) => {
-                // Draw point
+                // Draw point with scaled coordinates and size
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, pointSize, 0, 2 * Math.PI);
+                ctx.arc(p.x * zoomLevel, p.y * zoomLevel, scaledPointSize, 0, 2 * Math.PI);
                 
                 // Color based on selection state
                 if (selectedPoints.has(index)) {
@@ -468,8 +559,8 @@
 
         function handleMouseDown(e) {
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = (e.clientX - rect.left) / zoomLevel;
+            const y = (e.clientY - rect.top) / zoomLevel;
             
             if (currentMode === 'edit') {
                 draggingPointIndex = getPointAt(x, y);
@@ -487,8 +578,8 @@
 
         function handleMouseMove(e) {
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = (e.clientX - rect.left) / zoomLevel;
+            const y = (e.clientY - rect.top) / zoomLevel;
             
             if (currentMode === 'edit' && draggingPointIndex !== -1) {
                 // Drag individual point (only in edit mode)
@@ -509,8 +600,8 @@
             } else if (currentMode === 'select' && isSelecting) {
                 // Finalize selection rectangle (only in select mode)
                 const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const x = (e.clientX - rect.left) / zoomLevel;
+                const y = (e.clientY - rect.top) / zoomLevel;
                 selectionEnd = { x, y };
                 
                 selectPointsInRectangle();
@@ -532,6 +623,22 @@
             }
         }
 
+        function handleWheel(e) {
+            // Only zoom when Ctrl key is held
+            if (e.ctrlKey) {
+                e.preventDefault();
+                
+                // Determine zoom direction based on scroll direction
+                if (e.deltaY < 0) {
+                    // Scroll up = zoom in
+                    zoomIn();
+                } else {
+                    // Scroll down = zoom out
+                    zoomOut();
+                }
+            }
+        }
+
         function handleCanvasClick(e) {
             // Prevent click if we were dragging or selecting
             if (draggingPointIndex !== -1 || isDragging) {
@@ -540,8 +647,8 @@
             }
 
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = (e.clientX - rect.left) / zoomLevel;
+            const y = (e.clientY - rect.top) / zoomLevel;
             
             const pointIndex = getPointAt(x, y);
             
@@ -582,10 +689,10 @@
         }
 
         function updateSelectionRectangle() {
-            const left = Math.min(selectionStart.x, selectionEnd.x);
-            const top = Math.min(selectionStart.y, selectionEnd.y);
-            const width = Math.abs(selectionEnd.x - selectionStart.x);
-            const height = Math.abs(selectionEnd.y - selectionStart.y);
+            const left = Math.min(selectionStart.x, selectionEnd.x) * zoomLevel;
+            const top = Math.min(selectionStart.y, selectionEnd.y) * zoomLevel;
+            const width = Math.abs(selectionEnd.x - selectionStart.x) * zoomLevel;
+            const height = Math.abs(selectionEnd.y - selectionStart.y) * zoomLevel;
             
             selectionRectangle.style.left = left + 'px';
             selectionRectangle.style.top = top + 'px';
