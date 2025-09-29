@@ -11,7 +11,7 @@
             position: relative;
             width: fit-content;
             max-width: 100%;
-            margin: auto;
+            margin: 0;
             overflow: auto;
             max-height: 80vh;
         }
@@ -118,40 +118,98 @@
                     <button id="clear-selection-btn" class="px-4 py-2 rounded-lg font-medium transition duration-200 bg-red-600 text-white hover:bg-red-700 hidden">
                         Clear Selection
                     </button>
+                    <button id="change-category-btn" class="px-4 py-2 rounded-lg font-medium transition duration-200 bg-purple-600 text-white hover:bg-purple-700 hidden">
+                        Change Category
+                    </button>
                 </div>
                 <p id="mode-description" class="text-sm text-gray-400 mt-2">Current mode: Point Edit - Click to add/remove points, drag to move them</p>
             </div>
 
-            <!-- Controls for Point Size -->
-            <div class="mb-6">
-                <label for="point-size" class="block text-sm font-medium text-gray-200">Point Size: <span id="point-size-value">5</span>px</label>
-                <input type="range" id="point-size" min="1" max="20" value="5" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
-            </div>
 
-            <!-- Zoom Controls -->
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-200 mb-2">Zoom: <span id="zoom-value">100</span>%</label>
-                <div class="flex gap-2">
-                    <button id="zoom-out-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
-                        Zoom Out
-                    </button>
-                    <button id="zoom-reset-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
-                        Reset
-                    </button>
-                    <button id="zoom-in-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
-                        Zoom In
-                    </button>
+            <!-- Image Display and Canvas with Side Menus -->
+            <div class="flex gap-6 mb-6">
+                <div id="image-container" class="hidden">
+                    <img id="display-image" src="" alt="Uploaded Image">
+                    <canvas id="image-canvas"></canvas>
+                    <div id="selection-rectangle" class="selection-rectangle" style="display: none;"></div>
+                </div>
+                
+                <!-- Right Side Menus -->
+                <div class="w-80 flex-shrink-0">
+                    <!-- Labeling Category Menu -->
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-700 mb-4">
+                        <h2 class="text-xl font-bold mb-4 text-gray-100">Labeling Categories</h2>
+                        
+                        <!-- Default Category Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-200 mb-2">Default Category for New Points:</label>
+                            <select id="default-category-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200">
+                                <option value="default">Default</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Add New Category -->
+                        <div class="mb-6 p-4 bg-gray-700 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-200 mb-3">Add New Category</h3>
+                            <div class="space-y-3">
+                                <input type="text" id="category-name-input" placeholder="Category name" class="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-200 placeholder-gray-400 text-sm">
+                                <div class="flex items-center gap-2">
+                                    <label class="text-sm text-gray-300">Color:</label>
+                                    <input type="color" id="category-color-input" value="#ff0000" class="w-8 h-8 rounded border border-gray-500">
+                                </div>
+                                <button id="add-category-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded text-sm transition duration-200">
+                                    Add Category
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Categories List -->
+                        <div class="mb-4">
+                            <h3 class="text-sm font-medium text-gray-200 mb-3">Categories</h3>
+                            <div id="categories-list" class="space-y-2">
+                                <!-- Categories will be dynamically added here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Category Statistics -->
+                        <div class="mt-6 p-4 bg-gray-700 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-200 mb-3">Statistics</h3>
+                            <div id="category-stats" class="space-y-2 text-xs text-gray-300">
+                                <!-- Statistics will be dynamically updated here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Image Controls Menu -->
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-700">
+                        <h2 class="text-xl font-bold mb-4 text-gray-100">Image Controls</h2>
+                        
+                        <!-- Point Size Control -->
+                        <div class="mb-6 p-4 bg-gray-700 rounded-lg">
+                            <label for="point-size" class="block text-sm font-medium text-gray-200 mb-2">Point Size: <span id="point-size-value">5</span>px</label>
+                            <input type="range" id="point-size" min="1" max="20" value="5" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                        </div>
+                        
+                        <!-- Zoom Controls -->
+                        <div class="p-4 bg-gray-700 rounded-lg">
+                            <label class="block text-sm font-medium text-gray-200 mb-3">Zoom: <span id="zoom-value">100</span>%</label>
+                            <div class="flex gap-2">
+                                <button id="zoom-out-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
+                                    Zoom Out
+                                </button>
+                                <button id="zoom-reset-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
+                                    Reset
+                                </button>
+                                <button id="zoom-in-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
+                                    Zoom In
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Image Display and Canvas for Points -->
-            <div id="image-container" class="mb-6 hidden">
-                <img id="display-image" src="" alt="Uploaded Image">
-                <canvas id="image-canvas"></canvas>
-                <div id="selection-rectangle" class="selection-rectangle" style="display: none;"></div>
-            </div>
-
-                <div id="status-message" class="mt-4 text-center"></div>
+            <div id="status-message" class="mt-4 text-center"></div>
             </div>
             
             <!-- Processing Tab Content -->
@@ -197,6 +255,7 @@
         const editModeBtn = document.getElementById('edit-mode-btn');
         const selectModeBtn = document.getElementById('select-mode-btn');
         const clearSelectionBtn = document.getElementById('clear-selection-btn');
+        const changeCategoryBtn = document.getElementById('change-category-btn');
         const modeDescription = document.getElementById('mode-description');
         const zoomInBtn = document.getElementById('zoom-in-btn');
         const zoomOutBtn = document.getElementById('zoom-out-btn');
@@ -216,11 +275,25 @@
         const processingDisplayImage = document.getElementById('processing-display-image');
         const analyzeButton = document.getElementById('analyze-button');
         const processingStatusMessage = document.getElementById('processing-status-message');
+        
+        // Labeling category references
+        const defaultCategorySelect = document.getElementById('default-category-select');
+        const categoryNameInput = document.getElementById('category-name-input');
+        const categoryColorInput = document.getElementById('category-color-input');
+        const addCategoryBtn = document.getElementById('add-category-btn');
+        const categoriesList = document.getElementById('categories-list');
+        const categoryStats = document.getElementById('category-stats');
 
         let points = [];
         let pointSize = 5;
         let draggingPointIndex = -1;
         let isDragging = false;
+        
+        // Category management
+        let categories = {
+            'default': { name: 'Default', color: '#ff0000' }
+        };
+        let currentDefaultCategory = 'default';
         
         // Mode state
         let currentMode = 'edit'; // 'edit' or 'select'
@@ -234,7 +307,7 @@
         // Zoom state
         let zoomLevel = 1.0;
         let zoomStep = 0.2;
-        let minZoom = 0.5;
+        let minZoom = 0.1;
         let maxZoom = 3.0;
 
         // History management
@@ -274,6 +347,7 @@
         editModeBtn.addEventListener('click', () => switchMode('edit'));
         selectModeBtn.addEventListener('click', () => switchMode('select'));
         clearSelectionBtn.addEventListener('click', clearSelection);
+        changeCategoryBtn.addEventListener('click', changeSelectedPointsCategory);
         zoomInBtn.addEventListener('click', () => zoomIn());
         zoomOutBtn.addEventListener('click', () => zoomOut());
         zoomResetBtn.addEventListener('click', () => resetZoom());
@@ -290,6 +364,12 @@
         // Processing tab event listeners
         processingImageUpload.addEventListener('change', handleProcessingImageUpload);
         analyzeButton.addEventListener('click', analyzeImage);
+        
+        // Category management event listeners
+        addCategoryBtn.addEventListener('click', addCategory);
+        defaultCategorySelect.addEventListener('change', (e) => {
+            currentDefaultCategory = e.target.value;
+        });
 
 
         // Spacebar event listeners to hide/show points
@@ -435,8 +515,9 @@
             isSelecting = false;
             selectionRectangle.style.display = 'none';
             
-            // Hide clear selection button when switching modes
+            // Hide clear selection button and change category button when switching modes
             clearSelectionBtn.classList.add('hidden');
+            changeCategoryBtn.classList.add('hidden');
         }
 
         //  --- History management ---
@@ -510,12 +591,13 @@
                 points = lines.map(line => {
                     const [x, y] = line.split('\t').map(Number);
                     // Scale coordinates to match the displayed image size
-                    return { x: x * scaleX, y: y * scaleY };
+                    return { x: x * scaleX, y: y * scaleY, category: 'default' };
                 });
                 console.log('Parsed points:', points);
                 selectedPoints.clear(); // Clear selection when loading new coordinates
                 clearSelectionBtn.classList.add('hidden'); // Hide clear button when loading new coordinates
                 drawPoints();
+                updateCategoryStats();
             };
             reader.readAsText(file);
         }
@@ -531,7 +613,7 @@
                 ctx.beginPath();
                 ctx.arc(p.x * zoomLevel, p.y * zoomLevel, scaledPointSize, 0, 2 * Math.PI);
                 
-                // Color based on selection state
+                // Color based on selection state and category
                 if (selectedPoints.has(index)) {
                     ctx.fillStyle = 'rgba(59, 130, 246, 0.8)'; // Blue for selected
                     ctx.fill();
@@ -540,7 +622,10 @@
                     ctx.lineWidth = 2;
                     ctx.stroke();
                 } else {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.7)'; // Red for unselected
+                    // Use category color or default red
+                    const category = p.category || 'default';
+                    const categoryColor = categories[category]?.color || '#ff0000';
+                    ctx.fillStyle = categoryColor + 'B3'; // Add transparency
                     ctx.fill();
                 }
             });
@@ -618,8 +703,10 @@
         function updateClearSelectionButton() {
             if (selectedPoints.size > 0) {
                 clearSelectionBtn.classList.remove('hidden');
+                changeCategoryBtn.classList.remove('hidden');
             } else {
                 clearSelectionBtn.classList.add('hidden');
+                changeCategoryBtn.classList.add('hidden');
             }
         }
 
@@ -674,9 +761,10 @@
                 } else {
                     // Clicked on empty space: add point
                     saveToHistory();
-                    points.push({ x, y });
-                    console.log('Added point:', x, y);
+                    points.push({ x, y, category: currentDefaultCategory });
+                    console.log('Added point:', x, y, 'with category:', currentDefaultCategory);
                     drawPoints();
+                    updateCategoryStats();
                 }
             } else if (currentMode === 'select') {
                 // Select mode: selection only, no point manipulation
@@ -741,7 +829,206 @@
             // Clear selection
             selectedPoints.clear();
             drawPoints();
+            updateCategoryStats();
         }
+
+        // --- Category Management Functions ---
+        function changeSelectedPointsCategory() {
+            if (selectedPoints.size === 0) return;
+            
+            // Create a list of available categories
+            const categoryOptions = Object.entries(categories)
+                .map(([id, cat]) => `${id}:${cat.name}`)
+                .join('\n');
+            
+            const selection = prompt(`Select category for ${selectedPoints.size} selected points:\n\n${categoryOptions}\n\nEnter category ID:`);
+            if (selection === null) return; // User cancelled
+            
+            const categoryId = selection.trim();
+            if (!categories[categoryId]) {
+                alert('Invalid category ID');
+                return;
+            }
+            
+            saveToHistory();
+            
+            // Change category for all selected points
+            selectedPoints.forEach(pointIndex => {
+                points[pointIndex].category = categoryId;
+            });
+            
+            drawPoints();
+            updateCategoryStats();
+        }
+        
+        function addCategory() {
+            const name = categoryNameInput.value.trim();
+            const color = categoryColorInput.value;
+            
+            if (!name) {
+                alert('Please enter a category name');
+                return;
+            }
+            
+            // Check if category already exists
+            if (Object.values(categories).some(cat => cat.name.toLowerCase() === name.toLowerCase())) {
+                alert('Category with this name already exists');
+                return;
+            }
+            
+            // Generate unique ID
+            const id = 'cat_' + Date.now();
+            categories[id] = { name, color };
+            
+            // Add to default category select
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = name;
+            defaultCategorySelect.appendChild(option);
+            
+            // Clear inputs
+            categoryNameInput.value = '';
+            categoryColorInput.value = '#ff0000';
+            
+            // Update UI
+            updateCategoriesList();
+            updateCategoryStats();
+        }
+        
+        function updateCategoriesList() {
+            categoriesList.innerHTML = '';
+            
+            Object.entries(categories).forEach(([id, category]) => {
+                if (id === 'default') return; // Skip default category in the list
+                
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'flex items-center justify-between p-2 bg-gray-600 rounded';
+                
+                categoryDiv.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded" style="background-color: ${category.color}"></div>
+                        <span class="text-sm text-gray-200">${category.name}</span>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="editCategory('${id}')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1">Edit</button>
+                        <button onclick="deleteCategory('${id}')" class="text-red-400 hover:text-red-300 text-xs px-2 py-1">Delete</button>
+                    </div>
+                `;
+                
+                categoriesList.appendChild(categoryDiv);
+            });
+        }
+        
+        function editCategory(id) {
+            const category = categories[id];
+            if (!category) return;
+            
+            const newName = prompt('Enter new category name:', category.name);
+            if (newName === null) return; // User cancelled
+            
+            const newColor = prompt('Enter new color (hex):', category.color);
+            if (newColor === null) return; // User cancelled
+            
+            if (newName.trim()) {
+                // Check if name already exists (excluding current category)
+                const nameExists = Object.entries(categories).some(([catId, cat]) => 
+                    catId !== id && cat.name.toLowerCase() === newName.trim().toLowerCase()
+                );
+                
+                if (nameExists) {
+                    alert('Category with this name already exists');
+                    return;
+                }
+                
+                category.name = newName.trim();
+            }
+            
+            if (newColor && /^#[0-9A-F]{6}$/i.test(newColor)) {
+                category.color = newColor;
+            }
+            
+            // Update default category select
+            const option = defaultCategorySelect.querySelector(`option[value="${id}"]`);
+            if (option) {
+                option.textContent = category.name;
+            }
+            
+            updateCategoriesList();
+            drawPoints();
+            updateCategoryStats();
+        }
+        
+        function deleteCategory(id) {
+            if (id === 'default') {
+                alert('Cannot delete the default category');
+                return;
+            }
+            
+            // Check if any points use this category
+            const pointsUsingCategory = points.filter(p => p.category === id).length;
+            if (pointsUsingCategory > 0) {
+                const confirmDelete = confirm(`This category is used by ${pointsUsingCategory} points. Delete anyway? Points will be moved to default category.`);
+                if (!confirmDelete) return;
+                
+                // Move points to default category
+                points.forEach(p => {
+                    if (p.category === id) {
+                        p.category = 'default';
+                    }
+                });
+            }
+            
+            // Remove from categories
+            delete categories[id];
+            
+            // Remove from default category select
+            const option = defaultCategorySelect.querySelector(`option[value="${id}"]`);
+            if (option) {
+                option.remove();
+            }
+            
+            // If this was the current default, switch to default
+            if (currentDefaultCategory === id) {
+                currentDefaultCategory = 'default';
+                defaultCategorySelect.value = 'default';
+            }
+            
+            updateCategoriesList();
+            drawPoints();
+            updateCategoryStats();
+        }
+        
+        function updateCategoryStats() {
+            const stats = {};
+            
+            // Count points by category
+            points.forEach(p => {
+                const category = p.category || 'default';
+                stats[category] = (stats[category] || 0) + 1;
+            });
+            
+            // Update stats display
+            categoryStats.innerHTML = Object.entries(stats)
+                .map(([categoryId, count]) => {
+                    const category = categories[categoryId];
+                    const name = category ? category.name : 'Unknown';
+                    const color = category ? category.color : '#ff0000';
+                    return `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded" style="background-color: ${color}"></div>
+                                <span>${name}</span>
+                            </div>
+                            <span class="font-medium">${count}</span>
+                        </div>
+                    `;
+                })
+                .join('');
+        }
+        
+        // Initialize category UI
+        updateCategoriesList();
+        updateCategoryStats();
 
     </script>
 </body>
