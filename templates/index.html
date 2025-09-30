@@ -121,6 +121,9 @@
                     <button id="change-category-btn" class="px-4 py-2 rounded-lg font-medium transition duration-200 bg-purple-600 text-white hover:bg-purple-700 hidden">
                         Change Category
                     </button>
+                    <button id="download-points-btn" class="px-4 py-2 rounded-lg font-medium transition duration-200 bg-green-600 text-white hover:bg-green-700">
+                        Download Points
+                    </button>
                 </div>
                 <p id="mode-description" class="text-sm text-gray-400 mt-2">Current mode: Point Edit - Click to add/remove points, drag to move them</p>
             </div>
@@ -137,7 +140,7 @@
                 <!-- Right Side Menus -->
                 <div class="w-80 flex-shrink-0">
                     <!-- Labeling Category Menu -->
-                    <div class="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-700 mb-4">
+                    <div id="category-menu" class="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-700 mb-4 hidden">
                         <h2 class="text-xl font-bold mb-4 text-gray-100">Labeling Categories</h2>
                         
                         <!-- Default Category Selection -->
@@ -181,7 +184,7 @@
                     </div>
                     
                     <!-- Image Controls Menu -->
-                    <div class="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-700">
+                    <div id="image-controls-menu" class="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-700 hidden">
                         <h2 class="text-xl font-bold mb-4 text-gray-100">Image Controls</h2>
                         
                         <!-- Point Size Control -->
@@ -256,6 +259,7 @@
         const selectModeBtn = document.getElementById('select-mode-btn');
         const clearSelectionBtn = document.getElementById('clear-selection-btn');
         const changeCategoryBtn = document.getElementById('change-category-btn');
+        const downloadPointsBtn = document.getElementById('download-points-btn');
         const modeDescription = document.getElementById('mode-description');
         const zoomInBtn = document.getElementById('zoom-in-btn');
         const zoomOutBtn = document.getElementById('zoom-out-btn');
@@ -277,12 +281,16 @@
         const processingStatusMessage = document.getElementById('processing-status-message');
         
         // Labeling category references
+        const categoryMenu = document.getElementById('category-menu');
         const defaultCategorySelect = document.getElementById('default-category-select');
         const categoryNameInput = document.getElementById('category-name-input');
         const categoryColorInput = document.getElementById('category-color-input');
         const addCategoryBtn = document.getElementById('add-category-btn');
         const categoriesList = document.getElementById('categories-list');
         const categoryStats = document.getElementById('category-stats');
+        
+        // Image controls references
+        const imageControlsMenu = document.getElementById('image-controls-menu');
 
         let points = [];
         let pointSize = 5;
@@ -348,6 +356,7 @@
         selectModeBtn.addEventListener('click', () => switchMode('select'));
         clearSelectionBtn.addEventListener('click', clearSelection);
         changeCategoryBtn.addEventListener('click', changeSelectedPointsCategory);
+        downloadPointsBtn.addEventListener('click', downloadPointsAsText);
         zoomInBtn.addEventListener('click', () => zoomIn());
         zoomOutBtn.addEventListener('click', () => zoomOut());
         zoomResetBtn.addEventListener('click', () => resetZoom());
@@ -563,6 +572,7 @@
                     displayImage.src = e.target.result;
                     displayImage.onload = () => {
                         imageContainer.classList.remove('hidden');
+                        imageControlsMenu.classList.remove('hidden'); // Show image controls when image loads
                         
                         // Reset zoom when loading new image
                         zoomLevel = 1.0;
@@ -589,15 +599,51 @@
             reader.onload = (e) => {
                 const lines = e.target.result.split('\n').filter(line => line.trim() !== '');
                 points = lines.map(line => {
-                    const [x, y] = line.split('\t').map(Number);
+                    const parts = line.split('\t');
+                    const x = Number(parts[0]);
+                    const y = Number(parts[1]);
+                    
+                    // Check if there's a third entry (category)
+                    let category = 'default';
+                    if (parts.length >= 3 && parts[2].trim() !== '') {
+                        const categoryName = parts[2].trim();
+                        
+                        // Check if this category exists in our categories object
+                        let categoryId = null;
+                        for (const [id, cat] of Object.entries(categories)) {
+                            if (cat.name.toLowerCase() === categoryName.toLowerCase()) {
+                                categoryId = id;
+                                break;
+                            }
+                        }
+                        
+                        // If category exists, use it; otherwise create a new one
+                        if (categoryId) {
+                            category = categoryId;
+                        } else {
+                            // Create new category with a generated ID
+                            const newId = 'cat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                            categories[newId] = { name: categoryName, color: '#ff0000' };
+                            
+                            // Add to default category select
+                            const option = document.createElement('option');
+                            option.value = newId;
+                            option.textContent = categoryName;
+                            defaultCategorySelect.appendChild(option);
+                            
+                            category = newId;
+                        }
+                    }
+                    
                     // Scale coordinates to match the displayed image size
-                    return { x: x * scaleX, y: y * scaleY, category: 'default' };
+                    return { x: x * scaleX, y: y * scaleY, category: category };
                 });
                 console.log('Parsed points:', points);
                 selectedPoints.clear(); // Clear selection when loading new coordinates
                 clearSelectionBtn.classList.add('hidden'); // Hide clear button when loading new coordinates
                 drawPoints();
                 updateCategoryStats();
+                updateCategoriesList(); // Update the categories list in case new categories were added
             };
             reader.readAsText(file);
         }
@@ -632,6 +678,9 @@
             
             // Show/hide clear selection button based on selection
             updateClearSelectionButton();
+            
+            // Update category menu visibility
+            updateCategoryMenuVisibility();
         }
 
         function getPointAt(x, y) {
@@ -1024,11 +1073,51 @@
                     `;
                 })
                 .join('');
+                
+            // Update category menu visibility based on whether points exist
+            updateCategoryMenuVisibility();
         }
         
+        function updateCategoryMenuVisibility() {
+            if (points.length > 0) {
+                categoryMenu.classList.remove('hidden');
+            } else {
+                categoryMenu.classList.add('hidden');
+            }
+        }
+        
+        // --- Download Functions ---
+        function downloadPointsAsText() {
+            if (points.length === 0) {
+                alert('No points to download');
+                return;
+            }
+            
+            // Convert points to tab-separated format
+            const textContent = points.map(point => {
+                const x = Math.round(point.x);
+                const y = Math.round(point.y);
+                const category = point.category || 'default';
+                const categoryName = categories[category]?.name || 'Default';
+                return `${x}\t${y}\t${categoryName}`;
+            }).join('\n');
+            
+            // Create and download the file
+            const blob = new Blob([textContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'points.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
         // Initialize category UI
         updateCategoriesList();
         updateCategoryStats();
+        updateCategoryMenuVisibility();
 
     </script>
 </body>
