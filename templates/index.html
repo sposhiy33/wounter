@@ -555,6 +555,7 @@
             }
             // Update UI
             drawPoints();
+            updateCategoryStats(); // Update category statistics after undo
 
             // Remove current state from history
             historyStack.pop();
@@ -573,6 +574,7 @@
                     displayImage.onload = () => {
                         imageContainer.classList.remove('hidden');
                         imageControlsMenu.classList.remove('hidden'); // Show image controls when image loads
+                        categoryMenu.classList.remove('hidden'); // Show category menu when image loads
                         
                         // Reset zoom when loading new image
                         zoomLevel = 1.0;
@@ -678,9 +680,6 @@
             
             // Show/hide clear selection button based on selection
             updateClearSelectionButton();
-            
-            // Update category menu visibility
-            updateCategoryMenuVisibility();
         }
 
         function getPointAt(x, y) {
@@ -1073,17 +1072,6 @@
                     `;
                 })
                 .join('');
-                
-            // Update category menu visibility based on whether points exist
-            updateCategoryMenuVisibility();
-        }
-        
-        function updateCategoryMenuVisibility() {
-            if (points.length > 0) {
-                categoryMenu.classList.remove('hidden');
-            } else {
-                categoryMenu.classList.add('hidden');
-            }
         }
         
         // --- Download Functions ---
@@ -1117,7 +1105,6 @@
         // Initialize category UI
         updateCategoriesList();
         updateCategoryStats();
-        updateCategoryMenuVisibility();
 
     </script>
 </body>
