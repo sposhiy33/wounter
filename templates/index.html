@@ -15,11 +15,17 @@
             overflow: auto;
             max-height: 80vh;
         }
+        #image-wrapper {
+            position: relative;
+            transform-origin: top left;
+            transition: transform 0.1s ease-out;
+        }
         #image-canvas {
             position: absolute;
             top: 0;
             left: 0;
             cursor: crosshair;
+            transform-origin: top left;
         }
         #display-image {
             display: block;
@@ -121,7 +127,7 @@
                     <button id="change-category-btn" class="px-4 py-2 rounded-lg font-medium transition duration-200 bg-purple-600 text-white hover:bg-purple-700 hidden">
                         Change Category
                     </button>
-                    <button id="download-points-btn" class="px-4 py-2 rounded-lg font-medium transition duration-200 bg-green-600 text-white hover:bg-green-700">
+                    <button id="download-points-btn" class="px-4 py-2 rounded-lg font-medium transition duration-200 bg-green-600 text-white hover:bg-green-700 hidden">
                         Download Points
                     </button>
                 </div>
@@ -132,9 +138,11 @@
             <!-- Image Display and Canvas with Side Menus -->
             <div class="flex gap-6 mb-6">
                 <div id="image-container" class="hidden">
-                    <img id="display-image" src="" alt="Uploaded Image">
-                    <canvas id="image-canvas"></canvas>
-                    <div id="selection-rectangle" class="selection-rectangle" style="display: none;"></div>
+                    <div id="image-wrapper">
+                        <img id="display-image" src="" alt="Uploaded Image">
+                        <canvas id="image-canvas"></canvas>
+                        <div id="selection-rectangle" class="selection-rectangle" style="display: none;"></div>
+                    </div>
                 </div>
                 
                 <!-- Right Side Menus -->
@@ -194,19 +202,21 @@
                         </div>
                         
                         <!-- Zoom Controls -->
-                        <div class="p-4 bg-gray-700 rounded-lg">
-                            <label class="block text-sm font-medium text-gray-200 mb-3">Zoom: <span id="zoom-value">100</span>%</label>
-                            <div class="flex gap-2">
-                                <button id="zoom-out-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
-                                    Zoom Out
-                                </button>
-                                <button id="zoom-reset-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
-                                    Reset
-                                </button>
-                                <button id="zoom-in-btn" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium transition duration-200">
-                                    Zoom In
-                                </button>
+                        <div class="p-4 bg-gray-700 rounded-lg mb-6">
+                            <label class="block text-sm font-medium text-gray-200 mb-2">Zoom: <span id="zoom-value">100</span>%</label>
+                            <input type="range" id="zoom-slider" min="10" max="300" value="100" step="5" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500 mb-2">
+                            <div class="flex gap-2 justify-between text-xs text-gray-400">
+                                <span>10%</span>
+                                <span>100%</span>
+                                <span>300%</span>
                             </div>
+                        </div>
+                        
+                        <!-- Point Visibility Toggle -->
+                        <div class="p-4 bg-gray-700 rounded-lg">
+                            <button id="toggle-points-btn" class="w-full px-4 py-2 rounded-lg font-medium transition duration-200 bg-blue-600 text-white hover:bg-blue-700">
+                                Hide Points
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -261,10 +271,9 @@
         const changeCategoryBtn = document.getElementById('change-category-btn');
         const downloadPointsBtn = document.getElementById('download-points-btn');
         const modeDescription = document.getElementById('mode-description');
-        const zoomInBtn = document.getElementById('zoom-in-btn');
-        const zoomOutBtn = document.getElementById('zoom-out-btn');
-        const zoomResetBtn = document.getElementById('zoom-reset-btn');
+        const zoomSlider = document.getElementById('zoom-slider');
         const zoomValue = document.getElementById('zoom-value');
+        const imageWrapper = document.getElementById('image-wrapper');
         const ctx = canvas.getContext('2d');
         
         // Tab references
@@ -291,6 +300,7 @@
         
         // Image controls references
         const imageControlsMenu = document.getElementById('image-controls-menu');
+        const togglePointsBtn = document.getElementById('toggle-points-btn');
 
         let points = [];
         let pointSize = 5;
@@ -314,9 +324,8 @@
         
         // Zoom state
         let zoomLevel = 1.0;
-        let zoomStep = 0.2;
-        let minZoom = 0.1;
-        let maxZoom = 3.0;
+        let originalImageWidth = 0;
+        let originalImageHeight = 0;
 
         // History management
         let historyStack = []; // Store previous states
@@ -333,13 +342,16 @@
                 deleteSelectedPoints();
             } else if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
                 e.preventDefault();
-                zoomIn();
+                zoomLevel = Math.min(zoomLevel + 0.1, 3.0);
+                updateZoom();
             } else if (e.ctrlKey && e.key === '-') {
                 e.preventDefault();
-                zoomOut();
+                zoomLevel = Math.max(zoomLevel - 0.1, 0.1);
+                updateZoom();
             } else if (e.ctrlKey && e.key === '0') {
                 e.preventDefault();
-                resetZoom();
+                zoomLevel = 1.0;
+                updateZoom();
             }
         }); 
 
@@ -357,9 +369,10 @@
         clearSelectionBtn.addEventListener('click', clearSelection);
         changeCategoryBtn.addEventListener('click', changeSelectedPointsCategory);
         downloadPointsBtn.addEventListener('click', downloadPointsAsText);
-        zoomInBtn.addEventListener('click', () => zoomIn());
-        zoomOutBtn.addEventListener('click', () => zoomOut());
-        zoomResetBtn.addEventListener('click', () => resetZoom());
+        zoomSlider.addEventListener('input', (e) => {
+            zoomLevel = parseInt(e.target.value, 10) / 100;
+            updateZoom();
+        });
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('mousemove', handleMouseMove);
         canvas.addEventListener('mouseup', handleMouseUp);
@@ -381,15 +394,32 @@
         });
 
 
-        // Spacebar event listeners to hide/show points
+        // Points visibility state
+        let pointsVisible = true;
         let spacebarHeld = false;
 
+        // Function to toggle points visibility
+        function togglePointsVisibility() {
+            pointsVisible = !pointsVisible;
+            if (pointsVisible) {
+                drawPoints();
+                togglePointsBtn.textContent = 'Hide Points';
+                togglePointsBtn.className = 'w-full px-4 py-2 rounded-lg font-medium transition duration-200 bg-blue-600 text-white hover:bg-blue-700';
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                togglePointsBtn.textContent = 'Show Points';
+                togglePointsBtn.className = 'w-full px-4 py-2 rounded-lg font-medium transition duration-200 bg-green-600 text-white hover:bg-green-700';
+            }
+        }
+
+        // Spacebar event listeners to hide/show points
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && !spacebarHeld) {
                 e.preventDefault();
                 spacebarHeld = true;
-                // Clear only the points, keep the image
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (pointsVisible) {
+                    togglePointsVisibility();
+                }
             }
         });
 
@@ -397,50 +427,27 @@
             if (e.code === 'Space' && spacebarHeld) {
                 e.preventDefault();
                 spacebarHeld = false;
-                drawPoints();
+                if (!pointsVisible) {
+                    togglePointsVisibility();
+                }
             }
         });
 
+        // Button event listener for toggling points
+        togglePointsBtn.addEventListener('click', togglePointsVisibility);
+
         // --- Zoom Functions ---
-        function zoomIn() {
-            if (zoomLevel < maxZoom) {
-                zoomLevel = Math.min(zoomLevel + zoomStep, maxZoom);
-                updateZoom();
-            }
-        }
-
-        function zoomOut() {
-            if (zoomLevel > minZoom) {
-                zoomLevel = Math.max(zoomLevel - zoomStep, minZoom);
-                updateZoom();
-            }
-        }
-
-        function resetZoom() {
-            zoomLevel = 1.0;
-            updateZoom();
-        }
-
         function updateZoom() {
             zoomValue.textContent = Math.round(zoomLevel * 100);
+            zoomSlider.value = Math.round(zoomLevel * 100);
             
-            // Update image and canvas scaling
-            if (displayImage.src) {
-                const originalWidth = displayImage.naturalWidth;
-                const originalHeight = displayImage.naturalHeight;
-                const scaledWidth = originalWidth * zoomLevel;
-                const scaledHeight = originalHeight * zoomLevel;
+            // Use CSS transform to scale the image wrapper (GPU-accelerated, no re-rendering)
+            if (displayImage.src && originalImageWidth > 0) {
+                // Apply transform to the wrapper - this scales both image and canvas together
+                imageWrapper.style.transform = `scale(${zoomLevel})`;
                 
-                // Update image display
-                displayImage.style.width = scaledWidth + 'px';
-                displayImage.style.height = scaledHeight + 'px';
-                
-                // Update canvas size
-                canvas.width = scaledWidth;
-                canvas.height = scaledHeight;
-                
-                // Redraw points with new scale
-                drawPoints();
+                // Canvas stays at original size - CSS transform handles the scaling
+                // No need to redraw points as they're already at correct coordinates
             }
         }
 
@@ -556,6 +563,7 @@
             // Update UI
             drawPoints();
             updateCategoryStats(); // Update category statistics after undo
+            updateDownloadButton();
 
             // Remove current state from history
             historyStack.pop();
@@ -576,19 +584,31 @@
                         imageControlsMenu.classList.remove('hidden'); // Show image controls when image loads
                         categoryMenu.classList.remove('hidden'); // Show category menu when image loads
                         
+                        // Store original image dimensions
+                        originalImageWidth = displayImage.naturalWidth;
+                        originalImageHeight = displayImage.naturalHeight;
+                        
+                        // Set image to display at full resolution (no CSS width/height constraints)
+                        displayImage.style.width = originalImageWidth + 'px';
+                        displayImage.style.height = originalImageHeight + 'px';
+                        
+                        // Set canvas to match original image size
+                        canvas.width = originalImageWidth;
+                        canvas.height = originalImageHeight;
+                        canvas.style.width = originalImageWidth + 'px';
+                        canvas.style.height = originalImageHeight + 'px';
+                        
                         // Reset zoom when loading new image
                         zoomLevel = 1.0;
                         updateZoom();
                         
-                        // Scale the canvas to match the image display size with zoom
-                        const scaleX = (displayImage.offsetWidth * zoomLevel) / displayImage.naturalWidth;
-                        const scaleY = (displayImage.offsetHeight * zoomLevel) / displayImage.naturalHeight;
-                        
+                        // Process coordinates file if provided (no scaling needed as we use original coordinates)
                         if (coordsFile) {
-                            processCoordsFile(coordsFile, scaleX, scaleY);
+                            processCoordsFile(coordsFile, 1, 1);
                         } else {
                             points = []; // Clear points if no coords file
                             drawPoints();
+                            updateDownloadButton();
                         }
                     };
                 };
@@ -646,20 +666,25 @@
                 drawPoints();
                 updateCategoryStats();
                 updateCategoriesList(); // Update the categories list in case new categories were added
+                updateDownloadButton();
             };
             reader.readAsText(file);
         }
 
         function drawPoints() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Clear canvas at original size
+            ctx.clearRect(0, 0, originalImageWidth, originalImageHeight);
             
-            // Scale point size with zoom for better visibility
-            const scaledPointSize = pointSize * zoomLevel;
+            // Only draw points if they are visible
+            if (!pointsVisible) {
+                return;
+            }
             
+            // Use original point size (canvas will be scaled via CSS transform)
             points.forEach((p, index) => {
-                // Draw point with scaled coordinates and size
+                // Draw point at original coordinates (no zoom scaling needed as CSS transform handles it)
                 ctx.beginPath();
-                ctx.arc(p.x * zoomLevel, p.y * zoomLevel, scaledPointSize, 0, 2 * Math.PI);
+                ctx.arc(p.x, p.y, pointSize, 0, 2 * Math.PI);
                 
                 // Color based on selection state and category
                 if (selectedPoints.has(index)) {
@@ -692,6 +717,7 @@
 
         function handleMouseDown(e) {
             const rect = canvas.getBoundingClientRect();
+            // Account for CSS transform scale when calculating coordinates
             const x = (e.clientX - rect.left) / zoomLevel;
             const y = (e.clientY - rect.top) / zoomLevel;
             
@@ -711,6 +737,7 @@
 
         function handleMouseMove(e) {
             const rect = canvas.getBoundingClientRect();
+            // Account for CSS transform scale when calculating coordinates
             const x = (e.clientX - rect.left) / zoomLevel;
             const y = (e.clientY - rect.top) / zoomLevel;
             
@@ -733,6 +760,7 @@
             } else if (currentMode === 'select' && isSelecting) {
                 // Finalize selection rectangle (only in select mode)
                 const rect = canvas.getBoundingClientRect();
+                // Account for CSS transform scale when calculating coordinates
                 const x = (e.clientX - rect.left) / zoomLevel;
                 const y = (e.clientY - rect.top) / zoomLevel;
                 selectionEnd = { x, y };
@@ -758,6 +786,14 @@
             }
         }
 
+        function updateDownloadButton() {
+            if (points.length > 0) {
+                downloadPointsBtn.classList.remove('hidden');
+            } else {
+                downloadPointsBtn.classList.add('hidden');
+            }
+        }
+
         function handleWheel(e) {
             // Only zoom when Ctrl key is held
             if (e.ctrlKey) {
@@ -766,11 +802,12 @@
                 // Determine zoom direction based on scroll direction
                 if (e.deltaY < 0) {
                     // Scroll up = zoom in
-                    zoomIn();
+                    zoomLevel = Math.min(zoomLevel + 0.1, 3.0);
                 } else {
                     // Scroll down = zoom out
-                    zoomOut();
+                    zoomLevel = Math.max(zoomLevel - 0.1, 0.1);
                 }
+                updateZoom();
             }
         }
 
@@ -782,6 +819,7 @@
             }
 
             const rect = canvas.getBoundingClientRect();
+            // Account for CSS transform scale when calculating coordinates
             const x = (e.clientX - rect.left) / zoomLevel;
             const y = (e.clientY - rect.top) / zoomLevel;
             
@@ -806,6 +844,7 @@
                     });
                     selectedPoints = newSelectedPoints;
                     drawPoints();
+                    updateDownloadButton();
                 } else {
                     // Clicked on empty space: add point
                     saveToHistory();
@@ -813,6 +852,7 @@
                     console.log('Added point:', x, y, 'with category:', currentDefaultCategory);
                     drawPoints();
                     updateCategoryStats();
+                    updateDownloadButton();
                 }
             } else if (currentMode === 'select') {
                 // Select mode: selection only, no point manipulation
@@ -825,15 +865,17 @@
         }
 
         function updateSelectionRectangle() {
-            const left = Math.min(selectionStart.x, selectionEnd.x) * zoomLevel;
-            const top = Math.min(selectionStart.y, selectionEnd.y) * zoomLevel;
-            const width = Math.abs(selectionEnd.x - selectionStart.x) * zoomLevel;
-            const height = Math.abs(selectionEnd.y - selectionStart.y) * zoomLevel;
+            // Selection rectangle coordinates are in original image space
+            const left = Math.min(selectionStart.x, selectionEnd.x);
+            const top = Math.min(selectionStart.y, selectionEnd.y);
+            const width = Math.abs(selectionEnd.x - selectionStart.x);
+            const height = Math.abs(selectionEnd.y - selectionStart.y);
             
-            selectionRectangle.style.left = left + 'px';
-            selectionRectangle.style.top = top + 'px';
-            selectionRectangle.style.width = width + 'px';
-            selectionRectangle.style.height = height + 'px';
+            // Apply zoom transform to the rectangle position and size
+            selectionRectangle.style.left = (left * zoomLevel) + 'px';
+            selectionRectangle.style.top = (top * zoomLevel) + 'px';
+            selectionRectangle.style.width = (width * zoomLevel) + 'px';
+            selectionRectangle.style.height = (height * zoomLevel) + 'px';
         }
 
         function selectPointsInRectangle() {
@@ -878,6 +920,7 @@
             selectedPoints.clear();
             drawPoints();
             updateCategoryStats();
+            updateDownloadButton();
         }
 
         // --- Category Management Functions ---
